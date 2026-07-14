@@ -140,9 +140,8 @@ namespace BorderlessGaming.Logic.Windows
                     ToggleMouseCursorVisibility(frmMain, Boolstate.False);
                 }
 
-                // update window styles
-                Native.SetWindowLong(targetWindow, WindowLongIndex.Style, styleNewWindowStandard);
-                Native.SetWindowLong(targetWindow, WindowLongIndex.ExtendedStyle, styleNewWindowExtended);
+                // update window styles and immediately recalculate the non-client area
+                ApplyWindowStyles(targetWindow, styleNewWindowStandard, styleNewWindowExtended);
 
                 // update window position
                 if (favDetails.Size != FavoriteSize.NoChange)
@@ -369,11 +368,19 @@ namespace BorderlessGaming.Logic.Windows
             //wait before applying styles
             await TaskUtilities.WaitAndStartTaskAsync(() =>
             {
-                Native.SetWindowLong(targetWindow, WindowLongIndex.Style, styleNewWindowStandard);
-                Native.SetWindowLong(targetWindow, WindowLongIndex.ExtendedStyle, styleNewWindowExtended);
+                ApplyWindowStyles(targetWindow, styleNewWindowStandard, styleNewWindowExtended);
             }, 4);
         }
 
+        private static void ApplyWindowStyles(IntPtr targetWindow, WindowStyleFlags styleStandard,
+            WindowStyleFlags styleExtended)
+        {
+            Native.SetWindowLong(targetWindow, WindowLongIndex.Style, styleStandard);
+            Native.SetWindowLong(targetWindow, WindowLongIndex.ExtendedStyle, styleExtended);
+            Native.SetWindowPos(targetWindow, IntPtr.Zero, 0, 0, 0, 0,
+                SetWindowPosFlags.FrameChanged | SetWindowPosFlags.NoMove | SetWindowPosFlags.NoSize |
+                SetWindowPosFlags.NoZOrder);
+        }
 
         /// <summary>
         ///     Check if a window class contains Unreal because it differs per game.
@@ -400,8 +407,7 @@ namespace BorderlessGaming.Logic.Windows
                 return;
             }
 
-            Native.SetWindowLong(pd.WindowHandle, WindowLongIndex.Style, pd.OriginalStyleFlagsStandard);
-            Native.SetWindowLong(pd.WindowHandle, WindowLongIndex.ExtendedStyle, pd.OriginalStyleFlagsExtended);
+            ApplyWindowStyles(pd.WindowHandle, pd.OriginalStyleFlagsStandard, pd.OriginalStyleFlagsExtended);
             Native.SetWindowPos(pd.WindowHandle, IntPtr.Zero, pd.OriginalLocation.X, pd.OriginalLocation.Y,
                 pd.OriginalLocation.Width, pd.OriginalLocation.Height,
                 SetWindowPosFlags.ShowWindow | SetWindowPosFlags.NoZOrder);
