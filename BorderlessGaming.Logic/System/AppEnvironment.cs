@@ -20,6 +20,10 @@ namespace BorderlessGaming.Logic.System
         {
             get
             {
+                var testData = Environment.GetEnvironmentVariable("BG_MOUSE_TEST_DATA");
+                if (!string.IsNullOrWhiteSpace(testData))
+                    return testData;
+
                 var versionInfo = FileVersionInfo.GetVersionInfo(Path);
                 var userAppData = GetUserAppDataPath();
                 try

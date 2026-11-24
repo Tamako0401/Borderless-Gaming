@@ -91,6 +91,7 @@
     <Compile Include="Windows\Enumerations.cs" />
     <Compile Include="Windows\ForegroundManager.cs" />
     <Compile Include="Windows\Manipulation.cs" />
+    <Compile Include="Windows\SteinsGateMouseProbe.cs" />
     <Compile Include="Windows\Native.cs" />
     <Compile Include="Windows\Security.cs" />
     <Compile Include="Windows\Uac.cs" />

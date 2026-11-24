@@ -62,6 +62,8 @@ namespace BorderlessGaming.Logic.Windows
                     targetFrame = Screen.FromHandle(targetWindow).Bounds;
                 }
 
+                var mouseProbe = SteinsGateMouseProbe.Start(targetWindow, targetFrame);
+
                 // Get window styles
                 var styleCurrentWindowStandard = Native.GetWindowLong(targetWindow, WindowLongIndex.Style);
                 var styleCurrentWindowExtended = Native.GetWindowLong(targetWindow, WindowLongIndex.ExtendedStyle);
@@ -142,6 +144,7 @@ namespace BorderlessGaming.Logic.Windows
 
                 // update window styles and immediately recalculate the non-client area
                 ApplyWindowStyles(targetWindow, styleNewWindowStandard, styleNewWindowExtended);
+                mouseProbe?.AfterFrame();
 
                 // update window position
                 if (favDetails.Size != FavoriteSize.NoChange)
@@ -163,7 +166,7 @@ namespace BorderlessGaming.Logic.Windows
                         );
 
                         // And auto-maximize
-                        if (favDetails.ShouldMaximize)
+                        if (favDetails.ShouldMaximize && mouseProbe?.UseExactBounds != true)
                         {
                             Native.ShowWindow(targetWindow, WindowShowStyle.Maximize);
                         }
@@ -200,6 +203,8 @@ namespace BorderlessGaming.Logic.Windows
                         SetWindowPosFlags.NoSendChanging
                     );
                 }
+
+                mouseProbe?.Finish();
             }
 
             // Make a note that we attempted to make the window borderless
@@ -235,6 +240,8 @@ namespace BorderlessGaming.Logic.Windows
             {
                 targetFrame = Screen.FromHandle(targetWindow).Bounds;
             }
+
+            var mouseProbe = SteinsGateMouseProbe.Start(targetWindow, targetFrame);
 
             // Get window styles
             var styleCurrentWindowStandard = Native.GetWindowLong(targetWindow, WindowLongIndex.Style);
@@ -369,7 +376,9 @@ namespace BorderlessGaming.Logic.Windows
             await TaskUtilities.WaitAndStartTaskAsync(() =>
             {
                 ApplyWindowStyles(targetWindow, styleNewWindowStandard, styleNewWindowExtended);
+                mouseProbe?.AfterFrame();
             }, 4);
+            mouseProbe?.Finish();
         }
 
         private static void ApplyWindowStyles(IntPtr targetWindow, WindowStyleFlags styleStandard,
