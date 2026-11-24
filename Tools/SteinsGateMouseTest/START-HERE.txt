@@ -1,0 +1,12 @@
+Steins;Gate 鼠标测试版 v2
+
+1. 退出上一版 Borderless Gaming（包括托盘），把游戏重新开成普通窗口。
+2. 解压整个 ZIP，双击 Start Mouse Test.exe。
+3. 在左侧右键游戏，选「在…上无边框 / Make Borderless On…」，再选目标屏。
+4. 让游戏成为前台。把鼠标移到 CONFIG 字样上，确认只有真正移到按钮上才高亮。
+
+这版只对已核对的 Steam x86 游戏版本启用坐标修正。它改的是游戏读取的鼠标点位，
+游戏画面仍铺满目标屏。退出测试版或还原游戏窗口后，坐标修正停止。
+
+如果还是偏，请发这个解压目录里的 mouse-test.log。正常日志会出现
+input-mapping ... result=Installed，并在游戏成为前台后记录 mappedSample。

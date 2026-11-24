@@ -14,6 +14,9 @@ namespace BorderlessGaming.Logic.Windows
     {
         private const uint WmSize = 0x0005;
         private const uint WmExitSizeMove = 0x0232;
+        private const string InputOwner = "BorderlessGaming.SteinsGate.MouseOwner.v2";
+        private const string InputRaw = "BorderlessGaming.SteinsGate.MouseRaw.v2";
+        private const string InputMapped = "BorderlessGaming.SteinsGate.MouseMapped.v2";
         private static readonly IntPtr PerMonitorV2 = new IntPtr(-4);
         private static readonly object LogLock = new object();
         private static readonly string LogFile = Environment.GetEnvironmentVariable("BG_MOUSE_PROBE_LOG") ??
@@ -25,6 +28,7 @@ namespace BorderlessGaming.Logic.Windows
         private readonly string mode;
         private readonly Snapshot before;
         private bool attempted;
+        private IntPtr ownerWindow;
 
         private SteinsGateMouseProbe(IntPtr window, uint pid, Rectangle requested, string mode)
         {
@@ -67,7 +71,8 @@ namespace BorderlessGaming.Logic.Windows
         }
 
         internal bool UseExactBounds =>
-            mode == "release" && Environment.GetEnvironmentVariable("BG_MOUSE_TEST_DATA") != null;
+            (mode == "input" || mode == "release") &&
+            Environment.GetEnvironmentVariable("BG_MOUSE_TEST_DATA") != null;
 
         private static bool IsSteinsGate(IntPtr window, string processName)
         {
@@ -94,8 +99,9 @@ namespace BorderlessGaming.Logic.Windows
             Capture("after-frame", false);
         }
 
-        internal void Finish()
+        internal void Finish(IntPtr owner)
         {
+            ownerWindow = owner;
             Capture("after-final-position", true);
             _ = SampleSettled();
         }
@@ -108,18 +114,40 @@ namespace BorderlessGaming.Logic.Windows
             Checkpoint("+1000ms");
             await Task.Delay(1000).ConfigureAwait(false);
             Checkpoint("+2000ms");
+            if (mode == "input")
+            {
+                await Task.Delay(4000).ConfigureAwait(false);
+                Checkpoint("+6000ms");
+            }
         }
 
         private void Checkpoint(string phase)
         {
             var now = Capture(phase, false);
-            if (attempted || now == null || before == null || !now.Foreground ||
+            if (attempted || now == null || before == null || (mode != "input" && !now.Foreground) ||
                 requested != now.ClientScreen || requested != now.Monitor ||
                 !IsWide(before.ClientScreen) || !IsWide(now.ClientScreen) ||
                 now.ClientScreen.Width <= before.ClientScreen.Width)
                 return;
 
-            if (mode == "release")
+            if (mode == "input")
+            {
+                attempted = true;
+                try
+                {
+                    var result = SgInstallMouseMapping(window, ownerWindow, (uint)before.LogicalClient.Width,
+                        (uint)before.LogicalClient.Height);
+                    Log($"input-mapping pid={pid} hwnd=0x{window.ToInt64():X} result={result}" +
+                        $" native={before.LogicalClient.Width}x{before.LogicalClient.Height}" +
+                        $" output={now.ClientScreen.Width}x{now.ClientScreen.Height}");
+                }
+                catch (Exception ex) when (ex is DllNotFoundException || ex is EntryPointNotFoundException ||
+                    ex is BadImageFormatException)
+                {
+                    Log("input-mapping failed: " + ex.Message);
+                }
+            }
+            else if (mode == "release")
             {
                 if (!LooksStale(before.ClientScreen, before.LogicalClient.Size, now.ClientScreen,
                     now.Clip, now.Desktop))
@@ -248,6 +276,9 @@ namespace BorderlessGaming.Logic.Windows
                     int exStyle = ReadStyle(window, -20);
                     uint monitorDpi = measureMonitorDpi ? GetMonitorDpi(info.Monitor) : 0;
                     bool iconic = IsIconic(window);
+                    var mapping = mode == "input"
+                        ? $" mappedSample={ReadPointProperty(window, InputRaw)}->{ReadPointProperty(window, InputMapped)}"
+                        : "";
                     Log($"{phase} hwnd=0x{window.ToInt64():X} pid={pid} fg={snapshot.Foreground} " +
                         $"iconic={iconic} requested={Format(requested)} " +
                         $"windowPx={Format(outer.Rectangle)} clientPm={Format(client.Rectangle)} " +
@@ -256,7 +287,7 @@ namespace BorderlessGaming.Logic.Windows
                         $"desktopPx={Format(desktop)} monitorPx={Format(snapshot.Monitor)} " +
                         $"workPx={Format(info.Work.Rectangle)} monitorDpi={(monitorDpi == 0 ? "-" : monitorDpi.ToString())} " +
                         $"windowDpi={GetDpiForWindow(window)} dpiAwareness(BG/game)={Awareness(caller)}/{Awareness(target)} " +
-                        $"style=0x{style:X8} exStyle=0x{exStyle:X8} mode={mode}");
+                        $"style=0x{style:X8} exStyle=0x{exStyle:X8} mode={mode}{mapping}");
                     return iconic ? null : snapshot;
                 }
                 finally
@@ -269,6 +300,21 @@ namespace BorderlessGaming.Logic.Windows
                 Log(phase + " " + ex.Message);
                 return null;
             }
+        }
+
+        internal static void StopInputMapping(IntPtr hwnd)
+        {
+            if (GetPropW(hwnd, InputOwner) != IntPtr.Zero)
+                RemovePropW(hwnd, InputOwner);
+        }
+
+        private static string ReadPointProperty(IntPtr hwnd, string name)
+        {
+            uint packed = unchecked((uint)GetPropW(hwnd, name).ToInt32());
+            if (packed == 0)
+                return "-";
+            packed--;
+            return $"{packed & 0xFFFF},{packed >> 16}";
         }
 
         private static uint GetMonitorDpi(Rect monitor)
@@ -366,5 +412,21 @@ namespace BorderlessGaming.Logic.Windows
         [DllImport("user32.dll", ExactSpelling = true, CharSet = CharSet.Unicode)] private static extern IntPtr CreateWindowExW(uint exStyle, string className, string title, uint style, int x, int y, int width, int height, IntPtr parent, IntPtr menu, IntPtr module, IntPtr param);
         [DllImport("user32.dll")] private static extern bool DestroyWindow(IntPtr hwnd);
         [DllImport("kernel32.dll")] private static extern void SetLastError(uint error);
+
+        [DllImport("user32.dll", ExactSpelling = true, CharSet = CharSet.Unicode)]
+        private static extern IntPtr GetPropW(IntPtr hwnd, string name);
+
+        [DllImport("user32.dll", ExactSpelling = true, CharSet = CharSet.Unicode)]
+        private static extern IntPtr RemovePropW(IntPtr hwnd, string name);
+
+        [DefaultDllImportSearchPaths(DllImportSearchPath.ApplicationDirectory)]
+        [DllImport("SteinsGateInputFix.dll", ExactSpelling = true)]
+        private static extern InputInstallResult SgInstallMouseMapping(IntPtr hwnd, IntPtr owner,
+            uint nativeWidth, uint nativeHeight);
+
+        private enum InputInstallResult
+        {
+            Installed, InvalidWindow, GameBuildNotSupported, ThreadHookFailed, GameDidNotAcknowledge
+        }
     }
 }

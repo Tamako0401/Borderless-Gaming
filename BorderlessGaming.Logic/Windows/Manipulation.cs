@@ -204,7 +204,7 @@ namespace BorderlessGaming.Logic.Windows
                     );
                 }
 
-                mouseProbe?.Finish();
+                mouseProbe?.Finish(frmMain != null && frmMain.IsHandleCreated ? frmMain.Handle : IntPtr.Zero);
             }
 
             // Make a note that we attempted to make the window borderless
@@ -378,7 +378,7 @@ namespace BorderlessGaming.Logic.Windows
                 ApplyWindowStyles(targetWindow, styleNewWindowStandard, styleNewWindowExtended);
                 mouseProbe?.AfterFrame();
             }, 4);
-            mouseProbe?.Finish();
+            mouseProbe?.Finish(frmMain != null && frmMain.IsHandleCreated ? frmMain.Handle : IntPtr.Zero);
         }
 
         private static void ApplyWindowStyles(IntPtr targetWindow, WindowStyleFlags styleStandard,
@@ -416,6 +416,7 @@ namespace BorderlessGaming.Logic.Windows
                 return;
             }
 
+            SteinsGateMouseProbe.StopInputMapping(pd.WindowHandle);
             ApplyWindowStyles(pd.WindowHandle, pd.OriginalStyleFlagsStandard, pd.OriginalStyleFlagsExtended);
             Native.SetWindowPos(pd.WindowHandle, IntPtr.Zero, pd.OriginalLocation.X, pd.OriginalLocation.Y,
                 pd.OriginalLocation.Width, pd.OriginalLocation.Height,
